@@ -18,6 +18,14 @@ app.get('/proxy', async (req, res) => {
   return res.status(400).send('URL không hợp lệ!');
   }
 
+app.post('/login/', (req, res) => {
+  const url = 'https://mbasic.facebook.com/login.php'; // Facebook login URL (mbasic nhẹ cho J2ME)
+  request.post({ url, form: req.body }, (err, resp, body) => {
+    if (err) return res.status(500).send('Lỗi gửi tới Facebook');
+    res.send(body); // trả kết quả về cho client
+  });
+});
+
   try {
     const response = await axios.get(targetUrl, {
       headers: {
