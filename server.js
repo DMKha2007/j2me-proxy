@@ -17,7 +17,7 @@ app.get('/', (req, res) => {
 });
 
 // Middleware proxy cho GET và POST requests
-app.use('/proxy', async (req, res, next) => {
+app.get('/proxy', async (req, res, next) => {
   const targetUrl = req.query.url || req.body.url;
   if (!targetUrl || !/^https?:\/\//.test(targetUrl)) {
     return res.status(400).send('URL không hợp lệ!');
@@ -78,6 +78,58 @@ app.use('/proxy', async (req, res, next) => {
     res.send(wrapped);
   } catch (err) {
     res.status(500).send('Lỗi: ' + err.message);
+  }
+});
+app.all('/proxy', async (req, res) => {
+  const targetUrl = req.query.url || req.body.url;
+  if (!targetUrl || !/^https?:\/\//.test(targetUrl)) {
+    return res.status(400).send('URL không hợp lệ!');
+  }
+
+  try {
+    const method = req.method.toUpperCase();
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'Referer': targetUrl,
+    };
+
+    const axiosOptions = {
+      method: method,
+      url: targetUrl,
+      headers: headers,
+      maxRedirects: 5
+    };
+
+    if (method === 'POST') {
+      axiosOptions.data = req.body;
+      headers['Content-Type'] = req.headers['content-type'] || 'application/x-www-form-urlencoded';
+    }
+
+    const response = await axios(axiosOptions);
+
+    // Nếu là HTML thì xử lý lại như trước
+    const contentType = response.headers['content-type'] || '';
+    if (contentType.includes('text/html')) {
+      const $ = cheerio.load(response.data);
+      $('script, style, iframe, noscript').remove();
+      const body = $('body').html();
+
+      const wrapped = `
+        <html>
+          <head><meta charset="UTF-8"><title>J2ME Proxy</title></head>
+          <body>${body}</body>
+        </html>
+      `;
+
+      return res.send(wrapped);
+    } else {
+      // Trả lại dữ liệu khác như JSON, image, v.v.
+      res.set(response.headers);
+      return res.send(response.data);
+    }
+
+  } catch (err) {
+    res.status(500).send('Lỗi khi gửi đến server gốc: ' + err.message);
   }
 });
 
